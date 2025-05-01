@@ -10,7 +10,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Define the CNN class
+# Define the CNN class (unchanged)
 class CNN(nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
@@ -44,11 +44,18 @@ except Exception as e:
     print("Error loading model:", e)
     raise
 
-# Define image transform
+# Custom transform to invert image
+class InvertImage:
+    def __call__(self, img):
+        return 1.0 - img  # Invert: 1 (white) -> 0 (black), 0 (black) -> 1 (white)
+
+# Define image transform with contrast enhancement
 transform = transforms.Compose([
     transforms.Resize((28, 28)),
     transforms.Grayscale(num_output_channels=1),
     transforms.ToTensor(),
+    transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Normalize contrast
+    InvertImage(),  # Keep inversion for white-background images
 ])
 
 # Class labels
@@ -82,8 +89,8 @@ def index():
                         with torch.no_grad():
                             outputs = model(img_tensor)
                             print("Output shape:", outputs.shape)
-                            print("Output logits:", outputs.tolist())  # Log raw logits
-                            probabilities = torch.softmax(outputs, dim=1)  # Convert to probabilities
+                            print("Output logits:", outputs.tolist())
+                            probabilities = torch.softmax(outputs, dim=1)
                             print("Output probabilities:", probabilities.tolist())
                             _, predicted = torch.max(outputs, 1)
                             print("Predicted index:", predicted.item())
@@ -124,8 +131,8 @@ def predict_sample(filename):
             with torch.no_grad():
                 outputs = model(img_tensor)
                 print("Output shape:", outputs.shape)
-                print("Output logits:", outputs.tolist())  # Log raw logits
-                probabilities = torch.softmax(outputs, dim=1)  # Convert to probabilities
+                print("Output logits:", outputs.tolist())
+                probabilities = torch.softmax(outputs, dim=1)
                 print("Output probabilities:", probabilities.tolist())
                 _, predicted = torch.max(outputs, 1)
                 print("Predicted index:", predicted.item())
