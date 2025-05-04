@@ -1,16 +1,13 @@
 body {
     margin: 0;
     padding: 0;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     font-family: Arial, sans-serif;
     position: relative;
-    overflow: hidden;
+    min-height: 100vh;
+    background-color: #f9f9f9;
+    overflow: auto;
 }
 
-/* Faded background image */
 body::before {
     content: '';
     position: absolute;
@@ -18,31 +15,43 @@ body::before {
     left: 0;
     width: 100%;
     height: 100%;
-    background:  url('/static/clothes.jpg') no-repeat center center;
+    background: url('/static/clothes.jpg') no-repeat center center;
     background-size: cover;
-    opacity: 0.3; /* Much more visible now but still faint */
+    opacity: 0.3;
     z-index: -1;
 }
 
-/* Foreground container */
 .container {
     text-align: center;
     position: relative;
     z-index: 1;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+    max-width: 90%;
+    margin: 40px auto;
 }
 
 h1 {
     font-size: 48px;
     font-weight: bold;
-    margin-bottom: 50px;
+    margin-bottom: 30px;
     color: #000;
+}
+
+h2 {
+    font-size: 24px;
+    margin: 20px 0;
+    color: #333;
 }
 
 .file-upload {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 10px;
+    margin: 20px 0;
 }
 
 .file-upload input[type="file"] {
@@ -56,9 +65,154 @@ h1 {
     border-radius: 5px;
     cursor: pointer;
     font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+.file-upload label:hover {
+    background-color: #b0b0b0;
+}
+
+.file-upload button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+.file-upload button:hover {
+    background-color: #45a049;
 }
 
 .file-upload span {
     font-size: 16px;
     color: #000;
+}
+
+.image-preview {
+    margin: 10px 0;
+    max-width: 200px;
+    min-height: 50px; /* Ensure space for placeholder */
+}
+
+.image-preview img {
+    max-width: 100%;
+    height: auto;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+
+.preview-placeholder {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+}
+
+.note {
+    font-size: 14px;
+    color: #666;
+    margin: 10px 0;
+}
+
+.loading {
+    display: none;
+    font-size: 16px;
+    font-style: italic;
+    color: #666;
+    margin: 10px 0;
+}
+
+.error {
+    font-size: 18px;
+    color: red;
+    margin: 20px 0;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.result {
+    background-color: rgba(255, 255, 255, 0.85);
+    padding: 20px;
+    border-radius: 10px;
+    margin-top: 20px;
+    display: inline-block;
+    font-size: 20px;
+}
+
+.sample-images {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.sample-image {
+    text-align: center;
+}
+
+.sample-image img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    transition: border-color 0.2s;
+}
+
+.sample-image img:hover {
+    border-color: #333;
+}
+
+.sample-image a {
+    text-decoration: none;
+    color: #333;
+    font-size: 14px;
+}
+
+@media (max-width: 600px) {
+    .container {
+        padding: 20px;
+        margin: 20px auto;
+    }
+
+    h1 {
+        font-size: 32px;
+        margin-bottom: 20px;
+    }
+
+    h2 {
+        font-size: 20px;
+    }
+
+    .file-upload {
+        gap: 8px;
+    }
+
+    .file-upload label, .file-upload button, .file-upload span {
+        font-size: 14px;
+        padding: 8px 16px;
+    }
+
+    .image-preview {
+        max-width: 150px;
+    }
+
+    .preview-placeholder, .note, .loading, .error, .result {
+        font-size: 14px;
+        padding: 10px;
+    }
+
+    .sample-image img {
+        width: 80px;
+        height: 80px;
+    }
+
+    .sample-image a {
+        font-size: 12px;
+    }
 }

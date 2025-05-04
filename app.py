@@ -5,18 +5,26 @@ import torch.nn as nn
 from torchvision import transforms
 from PIL import Image
 import os
+import logging
 
 app = Flask(__name__)
-UPLOAD_FOLDER = 'static/uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Limit uploads to 16MB
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-# Define the CNN class (unchanged)
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Define the CNN class
 class CNN(nn.Module):
     def __init__(self):
         super(CNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1) 
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1)
         self.bn3 = nn.BatchNorm2d(128)
         self.fc1 = nn.Linear(128 * 3 * 3, 128)
         self.fc2 = nn.Linear(128, 10)
@@ -39,9 +47,9 @@ try:
     model = CNN()
     model.load_state_dict(torch.load('model/fashion_mnist_cnn.pth', map_location=torch.device('cpu')))
     model.eval()
-    print("Model loaded successfully")
+    logger.info("Model loaded successfully")
 except Exception as e:
-    print("Error loading model:", e)
+    logger.error(f"Error loading model: {e}")
     raise
 
 # Custom transform to invert image
@@ -55,97 +63,127 @@ transform = transforms.Compose([
     transforms.Grayscale(num_output_channels=1),
     transforms.ToTensor(),
     transforms.Lambda(lambda x: (x - x.min()) / (x.max() - x.min() + 1e-8)),  # Normalize contrast
-    InvertImage(),  # Keep inversion for white-background images
+    InvertImage(),
 ])
 
 # Class labels
 classes = ['T-shirt/Top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     prediction = None
+    confidence = None
+    error = None
+    sample_images = []
+    uploaded_image = None  # Ensure this is defined
+
     try:
-        sample_images = os.listdir('static/sample_images')
-        print("Sample images:", sample_images)
+        sample_images = [f for f in os.listdir('static/sample_images') if allowed_file(f)]
+        logger.info(f"Sample images: {sample_images}")
     except Exception as e:
-        print("Error listing sample images:", e)
-        sample_images = []
+        logger.error(f"Error listing sample images: {e}")
+        error = "Unable to load sample images"
 
     if request.method == 'POST':
-        if 'image' in request.files:
+        if 'image' not in request.files:
+            logger.warning("No file received in POST request")
+            error = "No file uploaded"
+        else:
             file = request.files['image']
-            print("File received:", file.filename)
-            if file:
-                filepath = os.path.join(UPLOAD_FOLDER, secure_filename(file.filename))
+            if file.filename == '':
+                logger.warning("Empty filename received")
+                error = "No file selected"
+            elif not allowed_file(file.filename):
+                logger.warning(f"Invalid file extension: {file.filename}")
+                error = "Invalid file format. Please upload PNG, JPG, or JPEG"
+            else:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                 try:
                     file.save(filepath)
-                    print("File saved:", filepath)
+                    logger.info(f"File saved: {filepath}")
                     img = Image.open(filepath)
-                    print("Image mode:", img.mode)
+                    logger.info(f"Image mode: {img.mode}")
                     img_tensor = transform(img).unsqueeze(0)
-                    print("Input tensor shape:", img_tensor.shape)
-                    print("Input tensor min/max:", img_tensor.min().item(), img_tensor.max().item())
+                    logger.info(f"Input tensor shape: {img_tensor.shape}")
+                    logger.info(f"Input tensor min/max: {img_tensor.min().item()} {img_tensor.max().item()}")
                     try:
                         with torch.no_grad():
                             outputs = model(img_tensor)
-                            print("Output shape:", outputs.shape)
-                            print("Output logits:", outputs.tolist())
+                            logger.info(f"Output shape: {outputs.shape}")
+                            logger.info(f"Output logits: {outputs.tolist()}")
                             probabilities = torch.softmax(outputs, dim=1)
-                            print("Output probabilities:", probabilities.tolist())
-                            _, predicted = torch.max(outputs, 1)
-                            print("Predicted index:", predicted.item())
+                            logger.info(f"Output probabilities: {probabilities.tolist()}")
+                            confidence, predicted = torch.max(probabilities, 1)
                             prediction = classes[predicted.item()]
-                            print("Prediction:", prediction)
+                            confidence = confidence.item() * 100
+                            logger.info(f"Predicted index: {predicted.item()}")
+                            logger.info(f"Prediction: {prediction} ({confidence:.2f}%)")
                     except Exception as e:
-                        print("Error during prediction:", e)
-                        prediction = "Prediction failed"
+                        logger.error(f"Error during prediction: {e}")
+                        error = "Prediction failed"
+                    finally:
+                        try:
+                            os.remove(filepath)  # Clean up uploaded file
+                            logger.info(f"File deleted: {filepath}")
+                        except Exception as e:
+                            logger.error(f"Error deleting file: {e}")
                 except Exception as e:
-                    print("Error processing image:", e)
-                    prediction = "Error processing image"
-        else:
-            print("No file received in POST request")
-            prediction = "No file uploaded"
+                    logger.error(f"Error processing image: {e}")
+                    error = "Error processing image"
+                uploaded_image = filename  # Set the filename to show the uploaded image
 
-    return render_template('index.html', prediction=prediction, sample_images=sample_images)
+    return render_template('index.html', prediction=prediction, confidence=confidence, error=error, sample_images=sample_images, uploaded_image=uploaded_image)
 
 @app.route('/predict_sample/<filename>')
 def predict_sample(filename):
     prediction = None
+    confidence = None
+    error = None
+    sample_images = []
+
     try:
-        sample_images = os.listdir('static/sample_images')
-        print("Sample images:", sample_images)
+        sample_images = [f for f in os.listdir('static/sample_images') if allowed_file(f)]
+        logger.info(f"Sample images: {sample_images}")
     except Exception as e:
-        print("Error listing sample images:", e)
-        sample_images = []
+        logger.error(f"Error listing sample images: {e}")
+        error = "Unable to load sample images"
 
     filepath = os.path.join('static/sample_images', filename)
-    try:
-        print("Attempting to open sample image:", filepath)
-        img = Image.open(filepath)
-        print("Sample image opened:", filepath)
-        print("Image mode:", img.mode)
-        img_tensor = transform(img).unsqueeze(0)
-        print("Input tensor shape:", img_tensor.shape)
-        print("Input tensor min/max:", img_tensor.min().item(), img_tensor.max().item())
+    if not allowed_file(filename):
+        logger.warning(f"Invalid file extension: {filename}")
+        error = "Invalid sample image format"
+    else:
         try:
-            with torch.no_grad():
-                outputs = model(img_tensor)
-                print("Output shape:", outputs.shape)
-                print("Output logits:", outputs.tolist())
-                probabilities = torch.softmax(outputs, dim=1)
-                print("Output probabilities:", probabilities.tolist())
-                _, predicted = torch.max(outputs, 1)
-                print("Predicted index:", predicted.item())
-                prediction = classes[predicted.item()]
-                print("Prediction:", prediction)
+            img = Image.open(filepath)
+            logger.info(f"Sample image opened: {filepath}")
+            logger.info(f"Image mode: {img.mode}")
+            img_tensor = transform(img).unsqueeze(0)
+            logger.info(f"Input tensor shape: {img_tensor.shape}")
+            logger.info(f"Input tensor min/max: {img_tensor.min().item()} {img_tensor.max().item()}")
+            try:
+                with torch.no_grad():
+                    outputs = model(img_tensor)
+                    logger.info(f"Output shape: {outputs.shape}")
+                    logger.info(f"Output logits: {outputs.tolist()}")
+                    probabilities = torch.softmax(outputs, dim=1)
+                    logger.info(f"Output probabilities: {probabilities.tolist()}")
+                    confidence, predicted = torch.max(probabilities, 1)
+                    prediction = classes[predicted.item()]
+                    confidence = confidence.item() * 100
+                    logger.info(f"Predicted index: {predicted.item()}")
+                    logger.info(f"Prediction: {prediction} ({confidence:.2f}%)")
+            except Exception as e:
+                logger.error(f"Error during prediction: {e}")
+                error = "Prediction failed"
         except Exception as e:
-            print("Error during prediction:", e)
-            prediction = "Prediction failed"
-    except Exception as e:
-        print("Error opening sample image:", e)
-        prediction = "Error loading sample image"
+            logger.error(f"Error opening sample image: {e}")
+            error = "Error loading sample image"
 
-    return render_template('index.html', prediction=prediction, sample_images=sample_images)
+    return render_template('index.html', prediction=prediction, confidence=confidence, error=error, sample_images=sample_images)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
