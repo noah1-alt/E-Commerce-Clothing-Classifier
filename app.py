@@ -78,7 +78,6 @@ def index():
     confidence = None
     error = None
     sample_images = []
-    uploaded_image = None  # Ensure this is defined
 
     try:
         sample_images = [f for f in os.listdir('static/sample_images') if allowed_file(f)]
@@ -134,9 +133,8 @@ def index():
                 except Exception as e:
                     logger.error(f"Error processing image: {e}")
                     error = "Error processing image"
-                uploaded_image = filename  # Set the filename to show the uploaded image
 
-    return render_template('index.html', prediction=prediction, confidence=confidence, error=error, sample_images=sample_images, uploaded_image=uploaded_image)
+    return render_template('index.html', prediction=prediction, confidence=confidence, error=error, sample_images=sample_images)
 
 @app.route('/predict_sample/<filename>')
 def predict_sample(filename):
@@ -186,4 +184,5 @@ def predict_sample(filename):
     return render_template('index.html', prediction=prediction, confidence=confidence, error=error, sample_images=sample_images)
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    # Running with debug=False for Heroku deployment
+    app.run(debug=False, host='0.0.0.0', port=5000)
